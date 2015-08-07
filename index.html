@@ -97,23 +97,25 @@ function getDonationsCount(){
 		success: function(response){
 			var newTotal = response.pagination.totalResults;
 
-			if (totalDonations == newTotal)
+			if (newTotal == fullDonations.length)
 				return;
 
-			getAllDonations(newTotal);
+			totalDonations = response.pagination.totalResults;
+			for(var i = 0; i <= newTotal / 150; i++){
+				getAllDonations(i + 1);
+			}
 		}
 	});
 
 }
 
-function getAllDonations(size){
+function getAllDonations(page){
 	$.ajax({
 		method: 'GET',
-		url: 'https://api.justgiving.com/v1/fundraising/pages/JoshOG24Hr/donations?pageSize=' + size,
+		url: 'https://api.justgiving.com/v1/fundraising/pages/JoshOG24Hr/donations?pageSize=150&pageNum=' + page,
 		headers: {'x-api-key': 'd877ac9f'},
 		dataType: 'json',
 		success: function(result){
-			totalDonations = result.pagination.totalResults;
 			var updatedDonations = result.donations;
 			
 			temp = diff(donations, updatedDonations);
