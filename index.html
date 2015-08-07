@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="utf-8">
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+	<title>JoshOG 24h Charity Stream</title>
+	<link rel="stylesheet" href="">
+	<script src="https://code.jquery.com/jquery-1.11.3.min.js"></script>
+	<script src="moment.min.js"></script>
+	<!-- Latest compiled and minified CSS -->
+	<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.5/css/bootstrap.min.css">
+	
+</head>
+<body>
+<div class="container" style="width: 80%">
+	<div id="infos" class="jumbotron text-center" style="padding: 30px; margin-bottom: 10px"><h2 id="eventName"></h2><h4 id="totalRaised" class=""></h4></div>
+	<div id="donations" style="padding: 20px"></div>
+</div>
+<div id="timer" style="position: fixed;top: 10px;right: 0;width: 70px;"></div>
+<!-- <button id="obsMode" type="button" class="btn btn-primary" style="position: fixed;top: 5px;left: 5px;">Stream integration</button>
+ -->
+
+
+<script>
+var donations = [];
+var totalDonations = 0;
+var fullDonations = [];
+var displayed = 0;
+
+var part1 = '<div class="panel panel-default"><div class="panel-body" style="padding: 10px"><div class="col-md-10"><blockquote style="margin-bottom: 5px"><p>';
+// message
+var part2 = '</p><footer>';
+// donorDisplayName
+var part3 = '<span class="momentTime small"';
+// donationDate
+var part4 = '</span></footer></blockquote></div><div class="col-md-2 donation-wrap"><p class="donation-amount text-center" style=";font-size: 20px;">';
+// $amount * 1.55 
+var part5 = '</p></div></div></div>';
+
+$(document).ready(function(){
+
+	getDonationsCount();
+	var time = 30;
+
+	setInterval(function(){
+		time = 30;
+		getDonationsCount();
+	}, 30000);
+
+	setInterval(function(){
+		time -= 1;
+		$('#timer').text('update in ' + time + ' sec');
+	}, 1000);
+
+	setInterval(function(){
+		if(displayed != totalDonations && fullDonations.length == totalDonations && fullDonations.length > 0 ) updateContent();
+	}, 100)
+
+	setInterval(function(){
+		$('.momentTime').each(function(index, item){
+			$(item).text(moment($(item).attr('data-time'), 'x').fromNow());
+		});
+	}, 60000);
+});
+
+function updateContent(){
+	var donation = fullDonations[displayed];
+	var usdValue = '';
+
+
+	if(donation.hasOwnProperty('donorLocalCurrencyCode') && donation.donorLocalCurrencyCode != 'USD'){
+		usdValue = ' [ $' + parseFloat(Math.round(donation.amount * 1.55 * 100) / 100).toFixed(2) + ' ] ';
+	}
+
+	var mom = moment(parseDonationDate(donation), 'x').subtract(1, 'hours');
+
+	var start = part1 + donation.message + part2 + donation.donorDisplayName + part3 + ' data-time="' + mom.valueOf() + '">' + mom.fromNow() + part4 ;
+
+	if(donation.amount == null){
+		$('#donations').prepend(start + parseFloat(Math.round(0 * 100) / 100).toFixed(2) + 'USD');
+	}
+	else{
+		$('#donations').prepend(start + parseFloat(Math.round(donation.donorLocalAmount * 100) / 100).toFixed(2) + donation.donorLocalCurrencyCode + usdValue);
+	}
+
+	
+
+	displayed += 1;
+}
+
+function getDonationsCount(){
+	$.ajax({
+		method: 'GET',
+		url: 'https://api.justgiving.com/v1/fundraising/pages/JoshOG24Hr/donations?pageSize=0',
+		headers: {'x-api-key': 'd877ac9f'},
+		dataType: 'json',
+		success: function(response){
+			var newTotal = response.pagination.totalResults;
+
+			if (totalDonations == newTotal)
+				return;
+
+			getAllDonations(newTotal);
+		}
+	});
+
+}
+
+function getAllDonations(size){
+	$.ajax({
+		method: 'GET',
+		url: 'https://api.justgiving.com/v1/fundraising/pages/JoshOG24Hr/donations?pageSize=' + size,
+		headers: {'x-api-key': 'd877ac9f'},
+		dataType: 'json',
+		success: function(result){
+			totalDonations = result.pagination.totalResults;
+			var updatedDonations = result.donations;
+			
+			temp = diff(donations, updatedDonations);
+			donations = updatedDonations;
+			updatedDonations = temp;
+
+			console.log(updatedDonations.length);
+
+			getDonationsInfo(updatedDonations);
+
+			updateHeader();
+		}
+	});
+}
+
+function getDonationsInfo(newDonations){
+	newDonations.forEach(function(item){
+		$.ajax({
+			method: 'GET',
+			url: 'https://api.justgiving.com/v1/donation/' + item.id,
+			headers: {'x-api-key': 'd877ac9f'},
+			dataType: 'json',
+			success: function(result){
+				fullDonations.push(result);
+				fullDonations.sort(function(a, b){return parseDonationDate(a) - parseDonationDate(b)})
+			}
+		});
+	});
+}
+
+function parseDonationDate(donation){
+	var t = donation.donationDate;
+	return t.substring(6, t.length - 7);
+}
+
+function updateHeader(){
+	$.ajax({
+		method: 'GET',
+		url: 'https://api.justgiving.com/v1/fundraising/pages/JoshOG24Hr',
+		headers: {'x-api-key': 'd877ac9f'},
+		dataType: 'json',
+		success: function(result){
+			$('#eventName').text(result.eventName);
+			$('#totalRaised').text(totalDonations + ' donations -> ' + result.currencySymbol + ' ' + parseFloat(Math.round(result.totalRaisedOnline * 100) / 100).toFixed(2));
+		}
+	});
+}
+
+
+
+function diff(oldA, newA){
+	if(oldA.length == 0 ) return newA;
+	filtered = newA.filter(function(elem){
+		var exist = false;
+		oldA.every(function(element, index){
+			if(element.id == elem.id) {
+				exist = true;
+				return false;
+			}
+			return true;
+		});
+		return !exist;
+	});
+	return filtered;
+}
+
+</script>
+	
+</body>
+</html>
